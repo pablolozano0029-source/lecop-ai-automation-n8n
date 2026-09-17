@@ -1,0 +1,134 @@
+{
+  "name": "Lecop M2 - Worker 1 (Extraccion y Validacion de Datos)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cliente"
+            },
+            {
+              "name": "texto_reclamo"
+            },
+            {
+              "name": "session_id"
+            }
+          ]
+        }
+      },
+      "id": "cc032966-017b-48e3-8ac0-210639ad1e8e",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "4a4e96dd-b03a-479e-bf8e-e2a4b401c1d0",
+      "name": "Chat Model (economico)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -40,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Extrae y valida los campos del reclamo.\nCliente: {{ $json.cliente }}\nTexto: {{ $json.texto_reclamo }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Sos un Worker especialista quirurgico de EXTRACCION Y VALIDACION. Tu unica tarea: normalizar el reclamo en un JSON limpio con cliente, categoria (RECLAMO_SERVICIO|ERRORES_ADMINISTRATIVOS), gravedad (BAJA|MEDIA|ALTA) y detalle (<=150 chars). No redactes correos. Si falta un dato critico, devolve status='error' con motivo."
+        }
+      },
+      "id": "b0e993a7-f110-499b-b6e0-ace368aad5ac",
+      "name": "Agent Worker 1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6900702b-0c8e-453a-8113-9fbac54b5f7c",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "96a36d1e-452b-4cfd-878e-113873a081aa",
+              "name": "data",
+              "value": "={{ $json.output }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "414858d9-f1fa-40ec-9f94-cae9936ea2ef",
+      "name": "Contrato de Salida (JSON limpio)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Agent Worker 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model (economico)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent Worker 1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Worker 1": {
+      "main": [
+        [
+          {
+            "node": "Contrato de Salida (JSON limpio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

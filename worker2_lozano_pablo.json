@@ -1,0 +1,136 @@
+{
+  "name": "Lecop M2 - Worker 2 (Redaccion de Acuse al Cliente)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cliente"
+            },
+            {
+              "name": "categoria"
+            },
+            {
+              "name": "gravedad"
+            },
+            {
+              "name": "detalle"
+            }
+          ]
+        }
+      },
+      "id": "d46f7b47-061e-46df-ab97-bc2a027e5bd0",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "bf2a85b5-dfc0-4328-95b7-60225b09e5a7",
+      "name": "Chat Model (economico)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -40,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Reclamo de {{ $json.cliente }} | {{ $json.categoria }} | {{ $json.gravedad }} | {{ $json.detalle }}",
+        "options": {
+          "systemMessage": "Sos un Worker especialista quirurgico de REDACCION. Escribi un acuse breve, cordial y profesional para el cliente confirmando la recepcion del reclamo y el plazo de respuesta (24-48hs habiles). No prometas reembolsos ni notas de credito. Max 600 caracteres."
+        }
+      },
+      "id": "e6cffd8d-1234-48a9-95d3-2b233670d8e7",
+      "name": "Agent Worker 2",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0945defb-dc4a-48cb-8836-e16f41d9c9ae",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "3e2a7cf7-cde3-4357-a496-9abfd83a7547",
+              "name": "borrador_acuse",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "caf2910d-6f96-4066-8306-2a6f16a7ebfc",
+      "name": "Contrato de Salida (JSON limpio)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Agent Worker 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model (economico)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent Worker 2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Worker 2": {
+      "main": [
+        [
+          {
+            "node": "Contrato de Salida (JSON limpio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

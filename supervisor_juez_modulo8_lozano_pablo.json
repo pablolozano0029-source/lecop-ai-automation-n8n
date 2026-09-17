@@ -1,0 +1,318 @@
+{
+  "name": "Lecop M8 - Supervisor AI-as-a-Judge",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "contexto"
+            },
+            {
+              "name": "respuesta_propuesta"
+            }
+          ]
+        }
+      },
+      "id": "0184ba82-306c-40f0-89b5-c4423a417482",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sos un JUEZ tecnico. Evalua la respuesta del agente contra la query y el contexto recuperado. Devolve SOLO el JSON del schema. Criterio: exactitud_factual>=4 => ACEPTADO; parcial => CORREGIR; falsa/alucinada => RECHAZADO.\n\nQUERY: {{ $json.query }}\nCONTEXTO: {{ $json.contexto }}\nRESPUESTA: {{ $json.respuesta_propuesta }}"
+            }
+          ]
+        },
+        "jsonSchema": "{\"type\":\"object\",\"properties\":{\"exactitud_factual\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":5},\"estado_veredicto\":{\"type\":\"string\",\"enum\":[\"ACEPTADO\",\"CORREGIR\",\"RECHAZADO\"]},\"critica\":{\"type\":\"string\"}},\"required\":[\"exactitud_factual\",\"estado_veredicto\",\"critica\"]}",
+        "jsonOutput": true,
+        "options": {}
+      },
+      "id": "eb7f90eb-321d-46c3-aafc-059fed139abb",
+      "name": "Juez LLM (Structured Output)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {},
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.content.estado_veredicto }}",
+                    "rightValue": "ACEPTADO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "outputKey": "ACEPTADO"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.content.estado_veredicto }}",
+                    "rightValue": "CORREGIR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "outputKey": "CORREGIR"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.content.estado_veredicto }}",
+                    "rightValue": "RECHAZADO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "outputKey": "RECHAZADO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0a447ee-d4cd-4578-8640-c9a2714116aa",
+      "name": "Switch (3 rutas por veredicto)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "abe86742-ebc4-4486-aced-abf32a45468d",
+              "name": "accion",
+              "value": "DESPACHAR",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5cce234b-9762-4bbf-b54d-f08bc13b3033",
+      "name": "ACEPTADO -> Salida real + Log",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fefc551b-75aa-4adc-ba37-823b2342803b",
+              "name": "accion",
+              "value": "REINTENTAR",
+              "type": "string"
+            },
+            {
+              "id": "9deb5965-ce7a-4167-9fdb-f2084f2d8148",
+              "name": "critica",
+              "value": "={{ $json.message.content.critica }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6764ec9d-4f47-4628-b1e8-bb9077612597",
+      "name": "CORREGIR -> reenvia critica al agente",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "id": "816be623-8679-4cda-9d22-057485ed3be8",
+      "name": "RECHAZADO -> Wait (HITL)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_CANAL"
+        },
+        "text": "=RECHAZADO por el Juez. Critica: {{ $json.message.content.critica }}. Aprobar/Editar.",
+        "otherOptions": {}
+      },
+      "id": "956c7620-0324-4b06-99e5-34a7d04ea2dd",
+      "name": "Slack - Alerta Aprobar/Editar",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_BASE"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Auditoria_Juez"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "veredicto": "={{ $('Juez LLM (Structured Output)').item.json.message.content.estado_veredicto }}",
+            "exactitud": "={{ $('Juez LLM (Structured Output)').item.json.message.content.exactitud_factual }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "01d13557-f305-4f4d-bb15-8bf50e0e1b7e",
+      "name": "Airtable - Log veredicto (auditoria)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        700,
+        -180
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Juez LLM (Structured Output)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juez LLM (Structured Output)": {
+      "main": [
+        [
+          {
+            "node": "Switch (3 rutas por veredicto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch (3 rutas por veredicto)": {
+      "main": [
+        [
+          {
+            "node": "ACEPTADO -> Salida real + Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CORREGIR -> reenvia critica al agente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RECHAZADO -> Wait (HITL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACEPTADO -> Salida real + Log": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Log veredicto (auditoria)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RECHAZADO -> Wait (HITL)": {
+      "main": [
+        [
+          {
+            "node": "Slack - Alerta Aprobar/Editar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

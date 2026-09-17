@@ -1,0 +1,528 @@
+{
+  "name": "Lecop M11 - Proyecto Final Integrador (Sistema Agentico)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lecop-reclamos",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "574f3a14-eee5-4fe9-9f08-bcd960231d4c",
+      "name": "Webhook (peticion asincrona)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={\"status\":\"recibido\",\"traceId\":\"{{ $json.headers['x-request-id'] || $runIndex }}\"}",
+        "options": {}
+      },
+      "id": "b1c0a9c2-fb46-4b30-8c1d-66e81ce525d2",
+      "name": "Respond 200 (recepcion inmediata)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "options": {}
+      },
+      "id": "95681287-16fc-43ab-9c71-521f8e49624f",
+      "name": "Chat Model (Manager)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=<contenido_correo>{{ $json.body.text }}</contenido_correo>",
+        "options": {
+          "systemMessage": "Sos el sistema agentico de Lecop Central. Manager que orquesta Workers, con memoria, RAG y supervision AI-as-a-Judge. No autorizas reembolsos ni notas de credito. Clasifica en taxonomia cerrada: RECLAMO_SERVICIO, ERRORES_ADMINISTRATIVOS, CONSULTA_POLITICA, ESCALAR_HUMANO."
+        }
+      },
+      "id": "d434f910-7b2d-4dbd-b0a3-429d4c77284f",
+      "name": "AI Agent MANAGER (Router)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "CONSULTA_POLITICA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ]
+              },
+              "outputKey": "RAG"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "5c20cd11-e5ef-4724-b45a-621d704e784b",
+      "name": "Switch (Router)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "44451847-419b-442c-ac8e-ada8dd26d84c",
+              "name": "query",
+              "value": "={{ $('Webhook (peticion asincrona)').item.json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "d391f914-9af4-49fe-b982-4e538018bd3f",
+              "name": "traceId",
+              "value": "={{ $('Webhook (peticion asincrona)').item.json.headers['x-request-id'] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2957b1af-9246-443f-b0ab-cf53e1f54263",
+      "name": "Set - minimo viable + traceId",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        540,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_ID_WORKER1",
+          "cachedResultName": "Lecop M2 - Worker 1 (Extraccion y Validacion de Datos)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "945c5164-de31-4b3f-8c47-8fbfc7dc909a",
+      "name": "Execute Workflow -> Worker (Wait)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "text": "={{ $('Webhook (peticion asincrona)').item.json.body.text }}",
+        "options": {
+          "systemMessage": "RAG: responde 100% con la Base_Conocimiento_Lecop, cita fuente, si no figura responde 'No se'."
+        }
+      },
+      "id": "c85fb1a7-9735-4367-b396-c2bf2f86c118",
+      "name": "AI Agent RAG",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        540,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "Base_Conocimiento_Lecop",
+        "toolDescription": "Politicas y procedimientos de Lecop.",
+        "topK": 4,
+        "options": {}
+      },
+      "id": "2890a873-c4d4-4527-b4c4-d9695812cadf",
+      "name": "Vector Store Retrieve Tool",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.1,
+      "position": [
+        540,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "be86c37f-fa2d-47d7-8c2f-4d45a2b9b1e7",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "57e8ca3b-757a-46e2-b7ce-0966e2780f67",
+      "name": "Chat Model (RAG)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        340,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_ID_JUEZ",
+          "cachedResultName": "Lecop M8 - Supervisor AI-as-a-Judge"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "cb19ca7e-66f3-4823-81cb-2b45e4d57e0c",
+      "name": "Execute Workflow -> Juez (obligatorio)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.exactitud_factual }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        }
+      },
+      "id": "f1301276-c5ab-41d8-8f31-9eb781534b2d",
+      "name": "IF - exactitud >= 4?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "subject": "Lecop - Respuesta validada",
+        "emailType": "text",
+        "message": "={{ $json.respuesta }}",
+        "options": {}
+      },
+      "id": "3ba8a71b-b9a1-494d-a701-72c9d38ea180",
+      "name": "Gmail Draft (salida validada + idempotente)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1460,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_CANAL"
+        },
+        "text": "=HITL: respuesta con exactitud<4, requiere revision. traceId {{ $('Set - minimo viable + traceId').item.json.traceId }}",
+        "otherOptions": {}
+      },
+      "id": "4b3c8864-41d0-4551-9284-0e64d315fc19",
+      "name": "Slack - Cola HITL",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1460,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REEMPLAZAR_BASE"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Logs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "traceId": "={{ $('Set - minimo viable + traceId').item.json.traceId }}",
+            "veredicto": "={{ $json.estado_veredicto }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "49ba15b2-3485-40a0-a2a1-7b18b478779b",
+      "name": "Airtable - Log correlacionado (traceId)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1700,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (peticion asincrona)": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 (recepcion inmediata)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent MANAGER (Router)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model (Manager)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent MANAGER (Router)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent MANAGER (Router)": {
+      "main": [
+        [
+          {
+            "node": "Switch (Router)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch (Router)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent RAG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set - minimo viable + traceId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - minimo viable + traceId": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow -> Worker (Wait)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow -> Worker (Wait)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow -> Juez (obligatorio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent RAG": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow -> Juez (obligatorio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Store Retrieve Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent RAG",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Vector Store Retrieve Tool",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model (RAG)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent RAG",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow -> Juez (obligatorio)": {
+      "main": [
+        [
+          {
+            "node": "IF - exactitud >= 4?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - exactitud >= 4?": {
+      "main": [
+        [
+          {
+            "node": "Gmail Draft (salida validada + idempotente)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack - Cola HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Draft (salida validada + idempotente)": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Log correlacionado (traceId)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Cola HITL": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Log correlacionado (traceId)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

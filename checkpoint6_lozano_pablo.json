@@ -1,0 +1,239 @@
+{
+  "name": "Lecop M6 - Voice AI (STT/TTS Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "4fca36d6-e1af-430c-89f0-63d77ff83c92",
+      "name": "Telegram Trigger (nota de voz)",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "data",
+        "options": {
+          "language": "es"
+        }
+      },
+      "id": "039fd0a9-ee8b-469d-9ef2-4c53307fbb74",
+      "name": "OpenAI Whisper (STT, es)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "id": "d4bc937d-5a91-4339-802c-56afb21e4cb9",
+      "name": "IF - Transcripcion valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "options": {}
+      },
+      "id": "01d8eff7-6666-4f9d-98b4-935eb331f096",
+      "name": "Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Sos el Agente de Triaje de LECOP CENTRAL (B2B fruta fresca). CONTENCION: limita SIEMPRE tus respuestas a un maximo de 200 caracteres. Prohibido URLs, vinetas y emojis (se leen literal en voz)."
+        }
+      },
+      "id": "e2545e68-4319-4242-834e-71637fcff1e2",
+      "name": "AI Agent (200 chars)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "generateAudio",
+        "modelId": "eleven_multilingual_v2",
+        "text": "={{ $json.output }}",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75
+        },
+        "options": {}
+      },
+      "id": "e18e0e7e-7017-4677-9b02-041db0162f71",
+      "name": "ElevenLabs (TTS Multilingual)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAudio",
+        "chatId": "={{ $('Telegram Trigger (nota de voz)').item.json.message.chat.id }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {}
+      },
+      "id": "f1977154-db3d-4f33-82c8-234ad0f851e0",
+      "name": "Telegram - Send Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={}",
+        "options": {}
+      },
+      "id": "d771f792-5cf8-42f2-a3cf-596b00286493",
+      "name": "Compliance - Destruye binario (memoria volatil)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1000,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger (nota de voz)": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Whisper (STT, es)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Whisper (STT, es)": {
+      "main": [
+        [
+          {
+            "node": "IF - Transcripcion valida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Transcripcion valida?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (200 chars)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent (200 chars)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (200 chars)": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs (TTS Multilingual)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs (TTS Multilingual)": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Send Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Send Voice": {
+      "main": [
+        [
+          {
+            "node": "Compliance - Destruye binario (memoria volatil)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

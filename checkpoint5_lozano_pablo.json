@@ -1,0 +1,161 @@
+{
+  "name": "Lecop M5 - RAG (Base Documental LlamaCloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9a70778b-a40b-47ff-92b9-bb3e11233136",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "options": {}
+      },
+      "id": "02cc58ed-b050-4904-962f-fae465e11c42",
+      "name": "Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "Sos el Agente de Triaje de LECOP CENTRAL (B2B fruta fresca).\n\n## MODO RAG (M5)\nResponde EXCLUSIVAMENTE con informacion recuperada por la herramienta 'Base_Conocimiento_Lecop'. Basa el 100% de tu respuesta en los fragmentos inyectados y CITA la fuente. REGLA DORADA: si el dato no figura en los fragmentos, responde textualmente 'No se'. Prohibido inventar politicas de calidad, plazos o precios."
+        }
+      },
+      "id": "f5caea8c-7782-48ca-8b90-beef379c863e",
+      "name": "AI Agent RAG (Tools Agent)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "Base_Conocimiento_Lecop",
+        "toolDescription": "Consulta el manual de procedimientos y politicas de calidad de Lecop (devoluciones, madurez de fruta, plazos de entrega, medios de pago). Usala SIEMPRE que el cliente pregunte por una politica o procedimiento.",
+        "topK": 4,
+        "options": {}
+      },
+      "id": "45780283-34e2-4117-b132-a1c0b430bcaa",
+      "name": "Vector Store Retrieve Tool (Top-K=4)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "1c780aa7-9eeb-4d86-8653-d439c2486aaa",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "administracion@lecopcentral.com.ar",
+        "subject": "Lecop M5 - Consulta RAG",
+        "emailType": "text",
+        "message": "=Q: {{ $('Chat Trigger').item.json.chatInput }}\nA: {{ $json.output }}",
+        "options": {}
+      },
+      "id": "6e4d5cd3-5f14-4588-b96f-46d5e07fae0c",
+      "name": "Gmail (Log)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent RAG (Tools Agent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent RAG (Tools Agent)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Store Retrieve Tool (Top-K=4)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent RAG (Tools Agent)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Vector Store Retrieve Tool (Top-K=4)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent RAG (Tools Agent)": {
+      "main": [
+        [
+          {
+            "node": "Gmail (Log)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
